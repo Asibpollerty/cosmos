@@ -1,111 +1,73 @@
 import { useState, useEffect } from 'react';
 import { supabase } from './supabaseClient';
-import { StarryBackground } from './components/StarryBackground';
 import { AuthScreen } from './components/AuthScreen';
-import { Sidebar } from './components/Sidebar';
-import { ChatArea } from './components/ChatArea';
-import { ProfileModal } from './components/ProfileModal';
-import { SearchModal } from './components/SearchModal';
-import { MobileMenu } from './components/MobileMenu';
-import { User } from './types';
+import { Session } from '@supabase/supabase-js';
 
-export function App() {
-  const [currentUser, setCurrentUser] = useState<any>(null);
-  const [selectedUser, setSelectedUser] = useState<User | null>(null);
-  const [showProfile, setShowProfile] = useState(false);
-  const [showSearch, setShowSearch] = useState(false);
-  const [showMobileMenu, setShowMobileMenu] = useState(false);
+function App() {
+  const [session, setSession] = useState<Session | null>(null);
   const [loading, setLoading] = useState(true);
 
-  // 1. Проверка авторизации через Supabase
   useEffect(() => {
+    // Получаем текущую сессию при загрузке
     supabase.auth.getSession().then(({ data: { session } }) => {
-      setCurrentUser(session?.user ?? null);
+      setSession(session);
       setLoading(false);
     });
 
-    const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, session) => {
-      setCurrentUser(session?.user ?? null);
-    });
+    // Слушаем изменения авторизации
+    const { data: { subscription } } = supabase.auth.onAuthStateChange(
+      (_event, session) => {
+        setSession(session);
+      }
+    );
 
     return () => subscription.unsubscribe();
   }, []);
 
-  const handleLogout = async () => {
-    await supabase.auth.signOut();
-    setSelectedUser(null);
-  };
-
-  if (loading) return <div className="h-screen bg-black" />;
-
-  // Если не залогинен — показываем экран входа
-  if (!currentUser) {
+  // Пока проверяем сессию
+  if (loading) {
     return (
-      <div className="min-h-screen bg-black text-white relative overflow-hidden">
-        <StarryBackground />
-        <AuthScreen /> 
+      <div className="min-h-screen bg-gray-900 flex items-center justify-center">
+        <p className="text-white text-xl">⏳ Загрузка...</p>
       </div>
     );
   }
 
-  return (
-    <div className="min-h-screen h-screen bg-black text-white relative overflow-hidden flex">
-      <StarryBackground />
-      
-      {/* Боковая панель */}
-      <Sidebar
-        currentUser={currentUser}
-        onSelectUser={(u: User) => setSelectedUser(u)}
-        onOpenProfile={() => setShowProfile(true)}
-        onOpenSearch={() => setShowSearch(true)}
-        onLogout={handleLogout}
-      />
-      
-      {/* ТВОЙ НОВЫЙ ЧАТ (Supabase) */}
-      <ChatArea
-        selectedUser={selectedUser}
-        currentUser={currentUser}
-      />
-      
-      {showProfile && (
-        <ProfileModal
-          user={currentUser}
-          onClose={() => setShowProfile(false)}
-        />
-      )}
-      
-      {showSearch && (
-        <SearchModal
-          onClose={() => setShowSearch(false)}
-          onSelectUser={(u: User) => {
-            setSelectedUser(u);
-            setShowSearch(false);
-          }}
-        />
-      )}
+  // Не авторизован — показываем AuthScreen
+  if (!session) {
+    return <AuthScreen />;
+  }
 
-      {/* Кнопка мобильного меню */}
-      <button
-        onClick={() => setShowMobileMenu(true)}
-        className="fixed top-4 left-4 z-40 lg:hidden p-3 bg-white/10 rounded-lg"
-      >
-        <svg className="w-5 h-5 text-white" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-          <line x1="3" y1="6" x2="21" y2="6" /><line x1="3" y1="12" x2="21" y2="12" /><line x1="3" y1="18" x2="21" y2="18" />
-        </svg>
-      </button>
-      
-      {showMobileMenu && (
-        <MobileMenu
-          isOpen={showMobileMenu}
-          onClose={() => setShowMobileMenu(false)}
-          currentUser={currentUser}
-          onSelectUser={(u: User) => {
-            setSelectedUser(u);
-            setShowMobileMenu(false);
-          }}
-          onLogout={handleLogout}
-        />
-      )}
+  // Авторизован — показываем основной контент
+  return (
+    <div className="min-h-screen bg-gray-900 text-white p-4">
+      <div className="max-w-lg mx-auto">
+        <div className="flex justify-between items-center mb-6">
+          <h1 className="text-xl font-bold">🏠 Главная</h1>
+          <button
+            onClick={async () => {
+              await supabase.auth.signOut();
+            }}
+            className="bg-red-600 hover:bg-red-700 px-4 py-2 rounded-lg 
+                       text-sm font-medium transition"
+          >
+            Выйти
+          </button>
+        </div>
+
+        <div className="bg-gray-800 rounded-xl p-6">
+          <p className="text-gray-300">
+            ✅ Ты вошёл как: <span className="text-white font-bold">
+              {session.user.email?.replace('@chatapp.local', '')}
+            </span>
+          </p>
+          <p className="text-gray-500 text-sm mt-2">
+            User ID: {session.user.id}
+          </p>
+        </div>
+      </div>
     </div>
   );
 }
+
+export default App;
